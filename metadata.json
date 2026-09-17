@@ -1,0 +1,6 @@
+{
+  "name": "RoadBook",
+  "description": "Transport Business Tracker to manage vehicles, bookings, expenses, and driver payments with profit and loss analytics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
