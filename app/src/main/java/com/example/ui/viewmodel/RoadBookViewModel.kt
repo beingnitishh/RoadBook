@@ -106,10 +106,10 @@ class RoadBookViewModel(application: Application) : AndroidViewModel(application
     fun canDeleteVehicles(): Boolean = !sessionState.value.isAuthenticated || sessionState.value.role == com.example.data.remote.UserRole.ADMIN
     fun canManageDrivers(): Boolean = !sessionState.value.isAuthenticated || sessionState.value.role in listOf(com.example.data.remote.UserRole.ADMIN, com.example.data.remote.UserRole.MANAGER)
     fun canDeleteDrivers(): Boolean = !sessionState.value.isAuthenticated || sessionState.value.role == com.example.data.remote.UserRole.ADMIN
-    fun canManageBookings(): Boolean = !sessionState.value.isAuthenticated || sessionState.value.role in listOf(com.example.data.remote.UserRole.ADMIN, com.example.data.remote.UserRole.MANAGER)
+    fun canManageBookings(): Boolean = !sessionState.value.isAuthenticated || sessionState.value.role in listOf(com.example.data.remote.UserRole.ADMIN, com.example.data.remote.UserRole.MANAGER, com.example.data.remote.UserRole.DRIVER)
     fun canDeleteBookings(): Boolean = !sessionState.value.isAuthenticated || sessionState.value.role == com.example.data.remote.UserRole.ADMIN
-    fun canManageExpenses(): Boolean = true // Drivers can add trip/fuel expenses, Admins and Managers can add all
-    fun canDeleteExpenses(): Boolean = !sessionState.value.isAuthenticated || sessionState.value.role == com.example.data.remote.UserRole.ADMIN
+    fun canManageExpenses(): Boolean = true // Drivers, Managers, Admins can add operational expenses
+    fun canDeleteExpenses(): Boolean = !sessionState.value.isAuthenticated || sessionState.value.role in listOf(com.example.data.remote.UserRole.ADMIN, com.example.data.remote.UserRole.MANAGER)
     fun canManageDriverPayments(): Boolean = !sessionState.value.isAuthenticated || sessionState.value.role == com.example.data.remote.UserRole.ADMIN
     fun canManageTeam(): Boolean = !sessionState.value.isAuthenticated || sessionState.value.role == com.example.data.remote.UserRole.ADMIN
 
@@ -172,6 +172,14 @@ class RoadBookViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun updateMemberRole(userId: String, newRole: com.example.data.remote.UserRole, onResult: (Boolean, String?) -> Unit) {
+        if (!canManageTeam()) {
+            onResult(false, "Only admins can change team member roles")
+            return
+        }
+        if (userId == sessionState.value.userId) {
+            onResult(false, "Users cannot change their own role")
+            return
+        }
         viewModelScope.launch {
             val res = repository.updateMemberRole(userId, newRole)
             if (res.isSuccess) {

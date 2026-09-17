@@ -633,6 +633,10 @@ class RoadBookRepository(
         val token = preferences.accessToken ?: return@withContext Result.failure(Exception("Not logged in"))
         val uid = preferences.userId ?: return@withContext Result.failure(Exception("No user id"))
 
+        if (_sessionState.value.businessId != null) {
+            return@withContext Result.failure(Exception("Users cannot change their business once assigned."))
+        }
+
         // Generate a human-friendly unique join code e.g. "RB-7842"
         val randomSuffix = (1000..9999).random()
         val joinCode = "RB-$randomSuffix"
@@ -640,15 +644,6 @@ class RoadBookRepository(
         val createRes = supabaseClient.createBusiness(businessName, joinCode, token)
         if (createRes.isSuccess) {
             val bDto = createRes.getOrThrow()
-            // Set current user as ADMIN of this business
-            val updateProf = ProfileDto(
-                id = uid,
-                businessId = bDto.id,
-                name = preferences.userName ?: "Admin",
-                email = preferences.userEmail ?: "",
-                role = UserRole.ADMIN
-            )
-            supabaseClient.updateProfile(updateProf, token)
 
             preferences.businessId = bDto.id
             preferences.businessName = bDto.name
@@ -674,28 +669,26 @@ class RoadBookRepository(
         val token = preferences.accessToken ?: return@withContext Result.failure(Exception("Not logged in"))
         val uid = preferences.userId ?: return@withContext Result.failure(Exception("No user id"))
 
-        val bRes = supabaseClient.getBusinessByJoinCode(joinCode, token)
-        val bDto = bRes.getOrNull() ?: return@withContext Result.failure(Exception("Business join code not found: $joinCode"))
+        if (_sessionState.value.businessId != null) {
+            return@withContext Result.failure(Exception("Users cannot change their business once assigned."))
+        }
 
-        val updateProf = ProfileDto(
-            id = uid,
-            businessId = bDto.id,
-            name = preferences.userName ?: "User",
-            email = preferences.userEmail ?: "",
-            role = requestedRole
-        )
-        val pRes = supabaseClient.updateProfile(updateProf, token)
-        if (pRes.isSuccess) {
+        val joinRes = supabaseClient.joinBusinessByCode(joinCode, token)
+        if (joinRes.isSuccess) {
+            val bDto = joinRes.getOrThrow()
+            // Joining user is always created as DRIVER
+            val assignedRole = UserRole.DRIVER
+
             preferences.businessId = bDto.id
             preferences.businessName = bDto.name
             preferences.businessJoinCode = bDto.joinCode
-            preferences.userRole = requestedRole.name
+            preferences.userRole = assignedRole.name
 
             _sessionState.value = _sessionState.value.copy(
                 businessId = bDto.id,
                 businessName = bDto.name,
                 businessJoinCode = bDto.joinCode,
-                role = requestedRole
+                role = assignedRole
             )
 
             // Migrate any local data if this device had standalone data
@@ -704,7 +697,7 @@ class RoadBookRepository(
             triggerSync()
             Result.success(bDto)
         } else {
-            Result.failure(Exception("Failed to associate profile with business"))
+            joinRes
         }
     }
 
@@ -716,6 +709,12 @@ class RoadBookRepository(
 
     suspend fun updateMemberRole(userId: String, newRole: UserRole): Result<ProfileDto> = withContext(Dispatchers.IO) {
         val token = preferences.accessToken ?: return@withContext Result.failure(Exception("Not logged in"))
+        if (_sessionState.value.role != UserRole.ADMIN) {
+            return@withContext Result.failure(Exception("Only ADMINs can change member roles."))
+        }
+        if (userId == _sessionState.value.userId) {
+            return@withContext Result.failure(Exception("Users cannot change their own role."))
+        }
         val existingProf = supabaseClient.getProfile(userId, token).getOrNull()
             ?: return@withContext Result.failure(Exception("Profile not found"))
 

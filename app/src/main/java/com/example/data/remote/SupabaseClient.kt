@@ -258,6 +258,28 @@ class SupabaseClient(
         }
     }
 
+    suspend fun joinBusinessByCode(joinCode: String, token: String): Result<BusinessDto> = withContext(Dispatchers.IO) {
+        try {
+            val url = "$baseUrl/rest/v1/rpc/join_business_by_code"
+            val payload = JSONObject().apply {
+                put("p_join_code", joinCode.trim().uppercase())
+            }
+            val request = newRequestBuilder(token)
+                .url(url)
+                .post(payload.toString().toRequestBody(jsonMediaType))
+                .build()
+            val response = httpClient.newCall(request).execute()
+            val body = response.body?.string().orEmpty()
+            if (!response.isSuccessful) return@withContext Result.failure(Exception("Failed to join business: $body"))
+
+            val obj = JSONObject(body)
+            Result.success(BusinessDto.fromJson(obj))
+        } catch (e: Exception) {
+            Log.e(tag, "joinBusinessByCode error", e)
+            Result.failure(e)
+        }
+    }
+
     suspend fun getBusinessByJoinCode(joinCode: String, token: String): Result<BusinessDto?> = withContext(Dispatchers.IO) {
         try {
             val codeClean = joinCode.trim().uppercase()
@@ -281,13 +303,12 @@ class SupabaseClient(
 
     suspend fun createBusiness(name: String, joinCode: String, token: String): Result<BusinessDto> = withContext(Dispatchers.IO) {
         try {
-            val url = "$baseUrl/rest/v1/businesses"
+            val url = "$baseUrl/rest/v1/rpc/create_business"
             val payload = JSONObject().apply {
-                put("name", name.trim())
-                put("join_code", joinCode.trim().uppercase())
+                put("p_name", name.trim())
+                put("p_join_code", joinCode.trim().uppercase())
             }
             val request = newRequestBuilder(token)
-                .header("Prefer", "return=representation")
                 .url(url)
                 .post(payload.toString().toRequestBody(jsonMediaType))
                 .build()
@@ -296,8 +317,8 @@ class SupabaseClient(
             val body = response.body?.string().orEmpty()
             if (!response.isSuccessful) return@withContext Result.failure(Exception("Failed to create business: $body"))
 
-            val array = JSONArray(body)
-            Result.success(BusinessDto.fromJson(array.getJSONObject(0)))
+            val obj = JSONObject(body)
+            Result.success(BusinessDto.fromJson(obj))
         } catch (e: Exception) {
             Log.e(tag, "createBusiness error", e)
             Result.failure(e)
